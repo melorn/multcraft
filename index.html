@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<title>SzorzoKraft - Szorzotabla Jatek</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #1a1a2e; overflow: hidden; font-family: 'Courier New', monospace; touch-action: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
+canvas { display: block; touch-action: none; }
+
+#ui {
+  position: fixed; top: 14px; left: 14px; color: #fff;
+  background: rgba(0,0,0,0.75); padding: 18px 24px; border-radius: 12px;
+  font-size: 32px; z-index: 10; min-width: 300px;
+  border: 3px solid #444;
+}
+#ui h3 { color: #5dade2; margin-bottom: 14px; font-size: 38px; }
+.inv-item { margin: 8px 0; }
+.inv-icon { display: inline-block; width: 30px; height: 30px; vertical-align: middle; margin-right: 12px; border-radius: 4px; }
+
+#build-menu {
+  position: fixed; top: 14px; right: 14px; color: #fff;
+  background: rgba(0,0,0,0.75); padding: 18px 24px; border-radius: 12px;
+  font-size: 28px; z-index: 10; border: 3px solid #444;
+}
+#build-menu h3 { color: #e67e22; margin-bottom: 14px; font-size: 38px; }
+.build-btn {
+  display: block; width: 100%; padding: 14px 18px; margin: 6px 0;
+  background: #2c3e50; color: #fff; border: 3px solid #555;
+  border-radius: 8px; cursor: pointer; font-family: 'Courier New', monospace;
+  font-size: 28px; text-align: left; transition: all 0.2s;
+}
+.build-btn:hover { background: #34495e; border-color: #e67e22; }
+.build-btn.active-build { background: #1a6b2a; border-color: #2ecc71; }
+.build-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.build-btn:disabled:hover { background: #2c3e50; border-color: #555; }
+
+#touch-actions {
+  position: fixed; bottom: 14px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 12px; z-index: 10;
+}
+.touch-btn {
+  padding: 18px 32px; background: rgba(0,0,0,0.75); color: #fff;
+  border: 3px solid #555; border-radius: 12px; font-size: 28px;
+  font-family: 'Courier New', monospace; cursor: pointer;
+  font-weight: bold; transition: all 0.2s; min-width: 160px; text-align: center;
+}
+.touch-btn:active { background: rgba(80,80,80,0.8); }
+#btn-collect { border-color: #5dade2; color: #5dade2; }
+#btn-cancel { border-color: #e74c3c; color: #e74c3c; display: none; }
+#btn-regen { border-color: #9b59b6; color: #9b59b6; }
+
+#math-modal {
+  display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.85); z-index: 100;
+  justify-content: center; align-items: center;
+}
+#math-modal.active { display: flex; }
+#math-box {
+  background: #2c3e50; padding: 50px 60px; border-radius: 16px;
+  text-align: center; border: 4px solid #e67e22;
+  box-shadow: 0 0 60px rgba(230,126,34,0.3);
+}
+#math-box h2 { color: #e67e22; margin-bottom: 14px; font-size: 48px; }
+#math-box p.sub { color: #aaa; margin-bottom: 32px; font-size: 30px; }
+#math-question { color: #fff; font-size: 88px; margin: 36px 0; font-weight: bold; }
+#math-input {
+  font-size: 64px; padding: 16px 24px; width: 280px; text-align: center;
+  background: #1a1a2e; color: #fff; border: 3px solid #555;
+  border-radius: 10px; font-family: 'Courier New', monospace;
+  outline: none;
+}
+#math-input:focus { border-color: #e67e22; }
+#math-submit {
+  display: block; margin: 24px auto 0; padding: 16px 50px;
+  background: #e67e22; color: #fff; border: none; border-radius: 10px;
+  font-size: 36px; cursor: pointer; font-family: 'Courier New', monospace;
+  font-weight: bold; transition: background 0.2s;
+}
+#math-submit:hover { background: #d35400; }
+#math-feedback { color: #e74c3c; margin-top: 22px; font-size: 32px; min-height: 38px; }
+#math-action { color: #5dade2; margin-bottom: 16px; font-size: 32px; }
+
+#message {
+  position: fixed; bottom: 100px; left: 50%; transform: translateX(-50%);
+  color: #fff; background: rgba(0,0,0,0.8); padding: 14px 30px;
+  border-radius: 12px; font-size: 32px; z-index: 10;
+  transition: opacity 0.5s; opacity: 0; pointer-events: none;
+  border: 2px solid #555; white-space: nowrap;
+}
+#message.show { opacity: 1; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="ui">
+  <h3>Keszlet</h3>
+  <div id="inventory"></div>
+</div>
+
+<div id="build-menu">
+  <h3>Epites</h3>
+  <button class="build-btn" ontouchstart="startBuild('wall')" onclick="startBuild('wall')" id="btn-wall">
+    [1] Fal (3 Ko)
+  </button>
+  <button class="build-btn" ontouchstart="startBuild('floor')" onclick="startBuild('floor')" id="btn-floor">
+    [2] Padlo (2 Fa)
+  </button>
+  <button class="build-btn" ontouchstart="startBuild('door')" onclick="startBuild('door')" id="btn-door">
+    [3] Ajto (2 Fa + 1 Ko)
+  </button>
+  <button class="build-btn" ontouchstart="startBuild('roof')" onclick="startBuild('roof')" id="btn-roof">
+    [4] Teto (3 Fa + 2 Ko)
+  </button>
+</div>
+
+<div id="touch-actions">
+  <button class="touch-btn" id="btn-collect" ontouchstart="tryCollect()" onclick="tryCollect()">Gyujtes</button>
+  <button class="touch-btn" id="btn-cancel" ontouchstart="cancelBuild()" onclick="cancelBuild()">Megse</button>
+  <button class="touch-btn" id="btn-regen" ontouchstart="regenerate()" onclick="regenerate()">Uj Vilag</button>
+</div>
+
+<div id="math-modal">
+  <div id="math-box">
+    <h2>Oldd meg a szorzast!</h2>
+    <p class="sub">Nincs idokorlat - gondolkodj nyugodtan!</p>
+    <div id="math-action"></div>
+    <div id="math-question"></div>
+    <input type="number" id="math-input" autofocus>
+    <button id="math-submit" onclick="checkAnswer()">OK</button>
+    <div id="math-feedback"></div>
+  </div>
+</div>
+
+<div id="message"></div>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+const TILE = 64;
+const GRASS_TYPES = 4;
+
+let world = [];
+let player = { x: 0, y: 0, dir: 0 };
+let inventory = { wood: 0, stone: 0 };
+let camera = { x: 0, y: 0 };
+let buildMode = null;
+let mathCallback = null;
+let mathA = 0, mathB = 0;
+let msgTimeout = null;
+
+const EMPTY = 0, TREE = 1, STONE = 2, WALL = 3, FLOOR = 4, DOOR = 5, ROOF = 6;
+
+const buildCosts = {
+  wall:  { wood: 0, stone: 3 },
+  floor: { wood: 2, stone: 0 },
+  door:  { wood: 2, stone: 1 },
+  roof:  { wood: 3, stone: 2 },
+};
+const buildTile = { wall: WALL, floor: FLOOR, door: DOOR, roof: ROOF };
+const buildNames = { wall: 'Fal', floor: 'Padlo', door: 'Ajto', roof: 'Teto' };
+
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener('resize', resize);
+resize();
+
+const WORLD_W = 60, WORLD_H = 45;
+function generateWorld() {
+  world = [];
+  for (let y = 0; y < WORLD_H; y++) {
+    world[y] = [];
+    for (let x = 0; x < WORLD_W; x++) {
+      let r = Math.random();
+      if (r < 0.12) world[y][x] = { type: TREE, grass: Math.floor(Math.random() * GRASS_TYPES) };
+      else if (r < 0.18) world[y][x] = { type: STONE, grass: Math.floor(Math.random() * GRASS_TYPES) };
+      else world[y][x] = { type: EMPTY, grass: Math.floor(Math.random() * GRASS_TYPES) };
+    }
+  }
+  let sx = Math.floor(WORLD_W / 2), sy = Math.floor(WORLD_H / 2);
+  for (let dy = -2; dy <= 2; dy++)
+    for (let dx = -2; dx <= 2; dx++)
+      if (world[sy+dy] && world[sy+dy][sx+dx]) world[sy+dy][sx+dx].type = EMPTY;
+  player.x = sx;
+  player.y = sy;
+}
+function saveWorld() {
+  let data = {
+    world: world,
+    player: player,
+    inventory: inventory
+  };
+  try { localStorage.setItem('szorzokraft_save', JSON.stringify(data)); } catch(e) {}
+}
+
+function loadWorld() {
+  try {
+    let raw = localStorage.getItem('szorzokraft_save');
+    if (!raw) return false;
+    let data = JSON.parse(raw);
+    if (!data.world || !data.player || !data.inventory) return false;
+    world = data.world;
+    player = data.player;
+    inventory = data.inventory;
+    return true;
+  } catch(e) { return false; }
+}
+
+function regenerate() {
+  if (document.getElementById('math-modal').classList.contains('active')) return;
+  generateWorld();
+  inventory = { wood: 0, stone: 0 };
+  buildMode = null;
+  saveWorld();
+  updateUI();
+  showMsg('Uj vilag generalva!');
+}
+
+if (!loadWorld()) {
+  generateWorld();
+}
+
+const S = TILE / 40;
+const grassColors = ['#4a7c3f', '#3d6b35', '#55863f', '#4e7a42'];
+const grassDetail = ['#3d6b35', '#2f5a28', '#447533', '#3a6a34'];
+
+function drawTile(x, y, tile, sx, sy) {
+  const px = sx, py = sy;
+  ctx.fillStyle = grassColors[tile.grass];
+  ctx.fillRect(px, py, TILE, TILE);
+  ctx.fillStyle = grassDetail[tile.grass];
+  let seed = (x * 7 + y * 13) % 17;
+  for (let i = 0; i < 4; i++) {
+    let dx = ((seed * (i+1) * 3) % (TILE-6)) + 3;
+    let dy = ((seed * (i+1) * 7) % (TILE-6)) + 3;
+    ctx.fillRect(px + dx, py + dy, 3, 3);
+  }
+
+  if (tile.type === TREE) {
+    ctx.fillStyle = '#6b4226';
+    ctx.fillRect(px + 24, py + 30, 16, 24);
+    ctx.fillStyle = '#2d5a1e';
+    ctx.beginPath(); ctx.arc(px + 32, py + 28, 22, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#3a7a28';
+    ctx.beginPath(); ctx.arc(px + 28, py + 22, 16, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#4a9a32';
+    ctx.beginPath(); ctx.arc(px + 36, py + 18, 11, 0, Math.PI * 2); ctx.fill();
+  }
+  else if (tile.type === STONE) {
+    ctx.fillStyle = '#888';
+    ctx.beginPath();
+    ctx.moveTo(px+10, py+55); ctx.lineTo(px+6, py+32); ctx.lineTo(px+18, py+12);
+    ctx.lineTo(px+42, py+8); ctx.lineTo(px+56, py+26); ctx.lineTo(px+52, py+55);
+    ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#999';
+    ctx.beginPath();
+    ctx.moveTo(px+18, py+12); ctx.lineTo(px+42, py+8); ctx.lineTo(px+56, py+26);
+    ctx.lineTo(px+32, py+28); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = '#777';
+    ctx.beginPath();
+    ctx.moveTo(px+10, py+55); ctx.lineTo(px+6, py+32); ctx.lineTo(px+18, py+12);
+    ctx.lineTo(px+32, py+28); ctx.closePath(); ctx.fill();
+  }
+  else if (tile.type === WALL) {
+    ctx.fillStyle = '#7f8c8d';
+    ctx.fillRect(px+3, py+3, TILE-6, TILE-6);
+    for (let r = 0; r < 4; r++) {
+      let oy = py + 5 + r * 15;
+      let off = r % 2 === 0 ? 0 : 14;
+      for (let c = -1; c < 4; c++) {
+        ctx.strokeStyle = '#5a6a6d';
+        ctx.strokeRect(px + 5 + off + c * 28, oy, 26, 13);
+      }
+    }
+    ctx.strokeStyle = '#555';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(px+3, py+3, TILE-6, TILE-6);
+    ctx.lineWidth = 1;
+  }
+  else if (tile.type === FLOOR) {
+    ctx.fillStyle = '#b5854b';
+    ctx.fillRect(px, py, TILE, TILE);
+    ctx.strokeStyle = '#9a7040';
+    for (let i = 0; i < 5; i++) {
+      ctx.beginPath();
+      ctx.moveTo(px, py + i * 13); ctx.lineTo(px + TILE, py + i * 13);
+      ctx.stroke();
+    }
+    ctx.strokeStyle = '#a07848';
+    for (let i = 0; i < 4; i++) {
+      let ox = (y % 2 === 0) ? 0 : 20;
+      ctx.beginPath();
+      ctx.moveTo(px + ox + i * 28, py); ctx.lineTo(px + ox + i * 28, py + TILE);
+      ctx.stroke();
+    }
+  }
+  else if (tile.type === DOOR) {
+    ctx.fillStyle = '#b5854b';
+    ctx.fillRect(px, py, TILE, TILE);
+    ctx.fillStyle = '#8b5e3c';
+    ctx.fillRect(px+10, py+6, TILE-20, TILE-12);
+    ctx.fillStyle = '#6b4226';
+    ctx.fillRect(px+13, py+10, TILE-26, TILE-20);
+    ctx.fillStyle = '#d4a645';
+    ctx.beginPath(); ctx.arc(px+45, py+32, 5, 0, Math.PI*2); ctx.fill();
+  }
+  else if (tile.type === ROOF) {
+    ctx.fillStyle = '#c0392b';
+    ctx.fillRect(px+3, py+3, TILE-6, TILE-6);
+    for (let r = 0; r < 5; r++) {
+      let oy = py + 3 + r * 12;
+      let off = r % 2 === 0 ? 0 : 12;
+      for (let c = -1; c < 5; c++) {
+        ctx.fillStyle = (r + c) % 2 === 0 ? '#c0392b' : '#a93226';
+        ctx.fillRect(px + 3 + off + c * 22, oy, 20, 11);
+      }
+    }
+    ctx.strokeStyle = '#8b2020';
+    ctx.lineWidth = 3;
+    ctx.strokeRect(px+3, py+3, TILE-6, TILE-6);
+    ctx.lineWidth = 1;
+  }
+}
+
+function drawPlayer(sx, sy) {
+  const px = sx, py = sy;
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.beginPath(); ctx.ellipse(px+32, py+56, 19, 8, 0, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#3498db';
+  ctx.fillRect(px+19, py+22, 26, 26);
+  ctx.fillStyle = '#f5cba7';
+  ctx.fillRect(px+21, py+6, 22, 19);
+  ctx.fillStyle = '#2c3e50';
+  if (player.dir === 0) { ctx.fillRect(px+26, py+13, 5, 5); ctx.fillRect(px+35, py+13, 5, 5); }
+  else if (player.dir === 1) { ctx.fillRect(px+34, py+13, 5, 5); ctx.fillRect(px+34, py+19, 5, 3); }
+  else if (player.dir === 2) { ctx.fillRect(px+26, py+19, 5, 5); ctx.fillRect(px+35, py+19, 5, 5); }
+  else { ctx.fillRect(px+26, py+13, 5, 5); ctx.fillRect(px+26, py+19, 5, 3); }
+  ctx.fillStyle = '#2c3e50';
+  ctx.fillRect(px+21, py+48, 10, 10);
+  ctx.fillRect(px+34, py+48, 10, 10);
+}
+
+function updateCamera() {
+  camera.x = player.x * TILE - canvas.width / 2 + TILE / 2;
+  camera.y = player.y * TILE - canvas.height / 2 + TILE / 2;
+}
+
+function render() {
+  updateCamera();
+  ctx.fillStyle = '#2d5a1e';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  let startX = Math.max(0, Math.floor(camera.x / TILE));
+  let startY = Math.max(0, Math.floor(camera.y / TILE));
+  let endX = Math.min(WORLD_W, Math.ceil((camera.x + canvas.width) / TILE) + 1);
+  let endY = Math.min(WORLD_H, Math.ceil((camera.y + canvas.height) / TILE) + 1);
+
+  for (let y = startY; y < endY; y++) {
+    for (let x = startX; x < endX; x++) {
+      let sx = x * TILE - camera.x;
+      let sy = y * TILE - camera.y;
+      drawTile(x, y, world[y][x], sx, sy);
+    }
+  }
+
+  // Build mode highlight at last touch/mouse position
+  if (buildMode && lastPointerX >= 0) {
+    let mx = Math.floor((lastPointerX + camera.x) / TILE);
+    let my = Math.floor((lastPointerY + camera.y) / TILE);
+    if (mx >= 0 && mx < WORLD_W && my >= 0 && my < WORLD_H) {
+      let sx = mx * TILE - camera.x;
+      let sy = my * TILE - camera.y;
+      let canPlace = world[my][mx].type === EMPTY && !(mx === player.x && my === player.y);
+      ctx.strokeStyle = canPlace ? '#2ecc71' : '#e74c3c';
+      ctx.lineWidth = 4;
+      ctx.strokeRect(sx+2, sy+2, TILE-4, TILE-4);
+      ctx.lineWidth = 1;
+      ctx.fillStyle = canPlace ? 'rgba(46,204,113,0.2)' : 'rgba(231,76,60,0.2)';
+      ctx.fillRect(sx+2, sy+2, TILE-4, TILE-4);
+    }
+  }
+
+  let psx = player.x * TILE - camera.x;
+  let psy = player.y * TILE - camera.y;
+  drawPlayer(psx, psy);
+
+  requestAnimationFrame(render);
+}
+
+// Inventory UI
+function updateUI() {
+  document.getElementById('inventory').innerHTML =
+    `<div class="inv-item"><span class="inv-icon" style="background:#6b4226;"></span>Fa: ${inventory.wood}</div>` +
+    `<div class="inv-item"><span class="inv-icon" style="background:#888;"></span>Ko: ${inventory.stone}</div>`;
+
+  for (let [key, cost] of Object.entries(buildCosts)) {
+    let btn = document.getElementById('btn-' + key);
+    let can = inventory.wood >= cost.wood && inventory.stone >= cost.stone;
+    btn.disabled = !can;
+  }
+  updateBuildUI();
+}
+
+function updateBuildUI() {
+  document.querySelectorAll('.build-btn').forEach(b => b.classList.remove('active-build'));
+  if (buildMode) {
+    let id = 'btn-' + buildMode;
+    document.getElementById(id).classList.add('active-build');
+    document.getElementById('btn-cancel').style.display = 'block';
+  } else {
+    document.getElementById('btn-cancel').style.display = 'none';
+  }
+}
+
+// Math challenge
+function showMath(actionText, callback) {
+  mathA = Math.floor(Math.random() * 10) + 1;
+  mathB = Math.floor(Math.random() * 10) + 1;
+  mathCallback = callback;
+  document.getElementById('math-action').textContent = actionText;
+  document.getElementById('math-question').textContent = `${mathA} \u00d7 ${mathB} = ?`;
+  document.getElementById('math-input').value = '';
+  document.getElementById('math-feedback').textContent = '';
+  document.getElementById('math-modal').classList.add('active');
+  setTimeout(() => document.getElementById('math-input').focus(), 100);
+}
+
+function checkAnswer() {
+  let val = parseInt(document.getElementById('math-input').value);
+  if (val === mathA * mathB) {
+    document.getElementById('math-modal').classList.remove('active');
+    if (mathCallback) mathCallback();
+    mathCallback = null;
+  } else {
+    document.getElementById('math-feedback').textContent = 'Nem jo! Probald ujra!';
+    document.getElementById('math-input').value = '';
+    document.getElementById('math-input').focus();
+  }
+}
+
+document.getElementById('math-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') checkAnswer();
+});
+
+function showMsg(text) {
+  let el = document.getElementById('message');
+  el.textContent = text;
+  el.classList.add('show');
+  clearTimeout(msgTimeout);
+  msgTimeout = setTimeout(() => el.classList.remove('show'), 2000);
+}
+
+// --- Touch handling ---
+let touchStartX = 0, touchStartY = 0;
+let touchStartTime = 0;
+let touchMoved = false;
+let lastPointerX = -1, lastPointerY = -1;
+const SWIPE_THRESHOLD = 30;
+
+canvas.addEventListener('touchstart', (e) => {
+  if (document.getElementById('math-modal').classList.contains('active')) return;
+  e.preventDefault();
+  let t = e.touches[0];
+  touchStartX = t.clientX;
+  touchStartY = t.clientY;
+  touchStartTime = Date.now();
+  touchMoved = false;
+}, { passive: false });
+
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  let t = e.touches[0];
+  let dx = t.clientX - touchStartX;
+  let dy = t.clientY - touchStartY;
+  if (Math.abs(dx) > SWIPE_THRESHOLD || Math.abs(dy) > SWIPE_THRESHOLD) {
+    touchMoved = true;
+  }
+}, { passive: false });
+
+canvas.addEventListener('touchend', (e) => {
+  if (document.getElementById('math-modal').classList.contains('active')) return;
+  e.preventDefault();
+  let t = e.changedTouches[0];
+  let dx = t.clientX - touchStartX;
+  let dy = t.clientY - touchStartY;
+  let elapsed = Date.now() - touchStartTime;
+
+  if (touchMoved && (Math.abs(dx) > SWIPE_THRESHOLD || Math.abs(dy) > SWIPE_THRESHOLD)) {
+    // Swipe -> move player
+    if (Math.abs(dx) > Math.abs(dy)) {
+      movePlayer(dx > 0 ? 1 : -1, 0);
+    } else {
+      movePlayer(0, dy > 0 ? 1 : -1);
+    }
+  } else if (!touchMoved && elapsed < 400) {
+    // Tap -> place building or collect
+    let tx = Math.floor((t.clientX + camera.x) / TILE);
+    let ty = Math.floor((t.clientY + camera.y) / TILE);
+    handleTapOnTile(tx, ty);
+  }
+}, { passive: false });
+
+function movePlayer(dx, dy) {
+  if (dx === 1) player.dir = 1;
+  else if (dx === -1) player.dir = 3;
+  else if (dy === -1) player.dir = 0;
+  else if (dy === 1) player.dir = 2;
+
+  let nx = player.x + dx, ny = player.y + dy;
+  if (nx < 0 || nx >= WORLD_W || ny < 0 || ny >= WORLD_H) return;
+  let t = world[ny][nx].type;
+  if (t === EMPTY || t === FLOOR || t === DOOR) {
+    player.x = nx;
+    player.y = ny;
+    saveWorld();
+  }
+}
+
+function handleTapOnTile(tx, ty) {
+  if (tx < 0 || tx >= WORLD_W || ty < 0 || ty >= WORLD_H) return;
+
+  if (buildMode) {
+    tryPlace(tx, ty);
+    return;
+  }
+
+  // Tap on adjacent tree/stone = collect
+  let dx = tx - player.x, dy = ty - player.y;
+  if (Math.abs(dx) <= 1 && Math.abs(dy) <= 1) {
+    let tile = world[ty][tx];
+    if (tile.type === TREE) {
+      showMath('Fa gyujtese', () => {
+        tile.type = EMPTY;
+        inventory.wood += 3;
+        updateUI();
+        saveWorld();
+        showMsg('+3 Fa!');
+      });
+      return;
+    }
+    if (tile.type === STONE) {
+      showMath('Ko banyaszasa', () => {
+        tile.type = EMPTY;
+        inventory.stone += 3;
+        updateUI();
+        saveWorld();
+        showMsg('+3 Ko!');
+      });
+      return;
+    }
+  }
+}
+
+// Mouse support (still works on desktop)
+let mouseX = 0, mouseY = 0;
+window.addEventListener('mousemove', (e) => { lastPointerX = e.clientX; lastPointerY = e.clientY; });
+canvas.addEventListener('click', (e) => {
+  if (document.getElementById('math-modal').classList.contains('active')) return;
+  let tx = Math.floor((e.clientX + camera.x) / TILE);
+  let ty = Math.floor((e.clientY + camera.y) / TILE);
+  if (buildMode) {
+    tryPlace(tx, ty);
+  } else {
+    handleTapOnTile(tx, ty);
+  }
+});
+
+// Keyboard support (still works on desktop)
+let keys = {};
+window.addEventListener('keydown', (e) => {
+  if (document.getElementById('math-modal').classList.contains('active')) return;
+  keys[e.key.toLowerCase()] = true;
+  if (e.key === 'Escape') { cancelBuild(); return; }
+  if (e.key >= '1' && e.key <= '4') {
+    let modes = ['wall', 'floor', 'door', 'roof'];
+    startBuild(modes[parseInt(e.key) - 1]);
+    return;
+  }
+  if (e.key === ' ') { e.preventDefault(); tryCollect(); }
+});
+window.addEventListener('keyup', (e) => { keys[e.key.toLowerCase()] = false; });
+
+function tryCollect() {
+  let dirs = [[0,0],[0,-1],[1,0],[0,1],[-1,0]];
+  for (let [dx, dy] of dirs) {
+    let tx = player.x + dx, ty = player.y + dy;
+    if (tx < 0 || tx >= WORLD_W || ty < 0 || ty >= WORLD_H) continue;
+    let tile = world[ty][tx];
+    if (tile.type === TREE) {
+      showMath('Fa gyujtese', () => {
+        tile.type = EMPTY;
+        inventory.wood += 3;
+        updateUI();
+        saveWorld();
+        showMsg('+3 Fa!');
+      });
+      return;
+    }
+    if (tile.type === STONE) {
+      showMath('Ko banyaszasa', () => {
+        tile.type = EMPTY;
+        inventory.stone += 3;
+        updateUI();
+        saveWorld();
+        showMsg('+3 Ko!');
+      });
+      return;
+    }
+  }
+  showMsg('Nincs semmi a kozelben');
+}
+
+function startBuild(type) {
+  let cost = buildCosts[type];
+  if (inventory.wood < cost.wood || inventory.stone < cost.stone) {
+    showMsg(`Nincs eleg alapanyag: ${buildNames[type]}!`);
+    return;
+  }
+  buildMode = type;
+  updateBuildUI();
+  showMsg(`${buildNames[type]} - koppints a palyan a lerakashoz`);
+}
+
+function cancelBuild() {
+  if (buildMode) {
+    buildMode = null;
+    updateBuildUI();
+    showMsg('Epites megszakitva');
+  }
+}
+
+function tryPlace(x, y) {
+  if (!buildMode) return;
+  if (x < 0 || x >= WORLD_W || y < 0 || y >= WORLD_H) return;
+  if (world[y][x].type !== EMPTY) { showMsg('Ide nem epithetol!'); return; }
+  if (x === player.x && y === player.y) { showMsg('Magadra nem epithetol!'); return; }
+
+  let cost = buildCosts[buildMode];
+  if (inventory.wood < cost.wood || inventory.stone < cost.stone) {
+    showMsg('Nincs eleg alapanyag!');
+    buildMode = null;
+    updateBuildUI();
+    return;
+  }
+
+  let type = buildMode;
+  showMath(`${buildNames[type]} epitese`, () => {
+    inventory.wood -= buildCosts[type].wood;
+    inventory.stone -= buildCosts[type].stone;
+    world[y][x].type = buildTile[type];
+    updateUI();
+    saveWorld();
+    showMsg(`${buildNames[type]} megepitve!`);
+  });
+  buildMode = null;
+  updateBuildUI();
+}
+
+// Movement (keyboard)
+let moveTimer = 0;
+const MOVE_DELAY = 120;
+function updateMovement(dt) {
+  if (document.getElementById('math-modal').classList.contains('active')) return;
+  moveTimer -= dt;
+  if (moveTimer > 0) return;
+
+  let dx = 0, dy = 0;
+  if (keys['w'] || keys['arrowup'])    { dy = -1; player.dir = 0; }
+  if (keys['s'] || keys['arrowdown'])  { dy = 1;  player.dir = 2; }
+  if (keys['a'] || keys['arrowleft'])  { dx = -1; player.dir = 3; }
+  if (keys['d'] || keys['arrowright']) { dx = 1;  player.dir = 1; }
+
+  if (dx === 0 && dy === 0) return;
+  let nx = player.x + dx, ny = player.y + dy;
+  if (nx < 0 || nx >= WORLD_W || ny < 0 || ny >= WORLD_H) return;
+  let t = world[ny][nx].type;
+  if (t === EMPTY || t === FLOOR || t === DOOR) {
+    player.x = nx;
+    player.y = ny;
+    moveTimer = MOVE_DELAY;
+    saveWorld();
+  }
+}
+
+let lastTime = performance.now();
+function gameLoop() {
+  let now = performance.now();
+  let dt = now - lastTime;
+  lastTime = now;
+  updateMovement(dt);
+  setTimeout(gameLoop, 16);
+}
+
+// Prevent iOS bounce/zoom
+document.addEventListener('touchmove', (e) => { e.preventDefault(); }, { passive: false });
+document.addEventListener('gesturestart', (e) => { e.preventDefault(); });
+document.addEventListener('gesturechange', (e) => { e.preventDefault(); });
+document.addEventListener('gestureend', (e) => { e.preventDefault(); });
+
+updateUI();
+render();
+gameLoop();
+</script>
+</body>
+</html>
