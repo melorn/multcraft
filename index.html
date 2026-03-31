@@ -164,6 +164,7 @@ canvas { display: block; touch-action: none; }
     <div id="math-question"></div>
     <input type="number" id="math-input" autofocus>
     <button id="math-submit" onclick="checkAnswer()">OK</button>
+    <div id="math-timer" style="display:none; font-size:42px; color:#e67e22; margin-top:18px; font-weight:bold;"></div>
     <div id="math-feedback"></div>
   </div>
 </div>
@@ -184,6 +185,13 @@ let camera = { x: 0, y: 0 };
 let buildMode = null;
 let mathCallback = null;
 let mathA = 0, mathB = 0;
+let zombie = { x: 0, y: 0, dir: 2, vx: 0, vy: 0, walking: false, walkTime: 0 };
+let zombieMoveTimer = 0;
+const ZOMBIE_MOVE_INTERVAL = 800;
+let duelActive = false;
+let duelTimer = 0;
+let duelDuration = 0;
+let duelTimerInterval = null;
 let msgTimeout = null;
 
 const EMPTY = 0, TREE = 1, STONE = 2, WALL = 3, FLOOR = 4, DOOR = 5, ROOF = 6;
@@ -247,11 +255,191 @@ function loadWorld() {
   } catch(e) { return false; }
 }
 
+function spawnZombie() {
+  // Spawn on an empty tile far from player (at least 15 tiles away)
+  let attempts = 0;
+  while (attempts < 500) {
+    let zx = Math.floor(Math.random() * WORLD_W);
+    let zy = Math.floor(Math.random() * WORLD_H);
+    let dist = Math.abs(zx - player.x) + Math.abs(zy - player.y);
+    if (dist >= 15 && world[zy][zx].type === EMPTY) {
+      zombie.x = zx; zombie.y = zy; zombie.dir = 2;
+      zombie.walking = false; zombie.vx = 0; zombie.vy = 0; zombie.walkTime = 0;
+      return;
+    }
+    attempts++;
+  }
+  // Fallback: just place it somewhere empty
+  for (let y = 0; y < WORLD_H; y++)
+    for (let x = 0; x < WORLD_W; x++)
+      if (world[y][x].type === EMPTY && (Math.abs(x - player.x) + Math.abs(y - player.y)) >= 5) {
+        zombie.x = x; zombie.y = y; zombie.dir = 2;
+        zombie.walking = false; zombie.vx = 0; zombie.vy = 0; zombie.walkTime = 0;
+        return;
+      }
+}
+
+function updateZombie(dt) {
+  if (duelActive) return;
+  if (document.getElementById('math-modal').classList.contains('active')) return;
+
+  // Update walk animation
+  if (zombie.walking) {
+    zombie.walkTime += dt;
+    if (zombie.walkTime >= MOVE_DURATION) {
+      zombie.walking = false;
+      zombie.vx = 0;
+      zombie.vy = 0;
+    }
+  }
+
+  if (zombie.walking) return;
+
+  // Check adjacency to player — start duel
+  let dx = Math.abs(zombie.x - player.x);
+  let dy = Math.abs(zombie.y - player.y);
+  if (dx + dy === 1) {
+    startDuel();
+    return;
+  }
+
+  // Slow random movement
+  zombieMoveTimer -= dt;
+  if (zombieMoveTimer > 0) return;
+  zombieMoveTimer = ZOMBIE_MOVE_INTERVAL;
+
+  let dirs = [[0,-1],[1,0],[0,1],[-1,0]];
+  // Shuffle
+  for (let i = dirs.length - 1; i > 0; i--) {
+    let j = Math.floor(Math.random() * (i + 1));
+    [dirs[i], dirs[j]] = [dirs[j], dirs[i]];
+  }
+  for (let [mdx, mdy] of dirs) {
+    let nx = zombie.x + mdx, ny = zombie.y + mdy;
+    if (nx < 0 || nx >= WORLD_W || ny < 0 || ny >= WORLD_H) continue;
+    let t = world[ny][nx].type;
+    if ((t === EMPTY || t === FLOOR || t === DOOR) && !(nx === player.x && ny === player.y)) {
+      if (mdx === 1) zombie.dir = 1;
+      else if (mdx === -1) zombie.dir = 3;
+      else if (mdy === -1) zombie.dir = 0;
+      else if (mdy === 1) zombie.dir = 2;
+      zombie.x = nx; zombie.y = ny;
+      zombie.walking = true; zombie.walkTime = 0;
+      zombie.vx = -mdx * TILE; zombie.vy = -mdy * TILE;
+      return;
+    }
+  }
+}
+
+function getZombieVisualOffset() {
+  if (!zombie.walking) return { ox: 0, oy: 0 };
+  let progress = Math.min(zombie.walkTime / MOVE_DURATION, 1);
+  let t = 1 - (1 - progress) * (1 - progress);
+  return { ox: zombie.vx * (1 - t), oy: zombie.vy * (1 - t) };
+}
+
+function drawZombie(sx, sy) {
+  const px = sx, py = sy;
+  let legSwing = 0;
+  if (zombie.walking) {
+    let progress = Math.min(zombie.walkTime / MOVE_DURATION, 1);
+    legSwing = Math.sin(progress * Math.PI * 2) * 6;
+  }
+
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
+  ctx.beginPath(); ctx.ellipse(px+32, py+56, 19, 8, 0, 0, Math.PI*2); ctx.fill();
+
+  // Legs
+  ctx.fillStyle = '#1a3a1a';
+  if (zombie.dir === 1 || zombie.dir === 3) {
+    ctx.fillRect(px+23, py+48 + legSwing, 10, 10);
+    ctx.fillRect(px+32, py+48 - legSwing, 10, 10);
+  } else {
+    ctx.fillRect(px+21 - legSwing, py+48, 10, 10);
+    ctx.fillRect(px+34 + legSwing, py+48, 10, 10);
+  }
+
+  // Body
+  ctx.fillStyle = '#2ecc71';
+  ctx.fillRect(px+19, py+22, 26, 26);
+  // Head
+  ctx.fillStyle = '#27ae60';
+  ctx.fillRect(px+19, py+4, 26, 22);
+  // Eyes (red, menacing)
+  ctx.fillStyle = '#e74c3c';
+  if (zombie.dir === 0) { ctx.fillRect(px+24, py+10, 6, 6); ctx.fillRect(px+34, py+10, 6, 6); }
+  else if (zombie.dir === 1) { ctx.fillRect(px+34, py+10, 6, 6); ctx.fillRect(px+34, py+18, 6, 3); }
+  else if (zombie.dir === 2) { ctx.fillRect(px+24, py+16, 6, 6); ctx.fillRect(px+34, py+16, 6, 6); }
+  else { ctx.fillRect(px+24, py+10, 6, 6); ctx.fillRect(px+24, py+18, 6, 3); }
+  // Mouth
+  ctx.fillStyle = '#1a1a1a';
+  if (zombie.dir === 2) {
+    ctx.fillRect(px+26, py+23, 4, 3); ctx.fillRect(px+34, py+23, 4, 3);
+  }
+}
+
+function startDuel() {
+  if (duelActive) return;
+  duelActive = true;
+  duelDuration = Math.floor(Math.random() * 16) + 15; // 15-30 seconds
+  duelTimer = duelDuration;
+
+  mathA = Math.floor(Math.random() * 8) + 2;
+  mathB = Math.floor(Math.random() * 8) + 2;
+  mathCallback = function() {
+    endDuel(true);
+  };
+
+  document.getElementById('math-action').textContent = 'Zombi parbaj!';
+  document.getElementById('math-question').textContent = `${mathA} \u00d7 ${mathB} = ?`;
+  document.getElementById('math-input').value = '';
+  document.getElementById('math-feedback').textContent = '';
+  document.getElementById('math-timer').textContent = duelTimer + ' mp';
+  document.getElementById('math-timer').style.display = 'block';
+  document.getElementById('math-box').querySelector('.sub').textContent = 'Old meg, mielott lejar az ido!';
+  document.getElementById('math-modal').classList.add('active');
+  setTimeout(() => document.getElementById('math-input').focus(), 100);
+
+  duelTimerInterval = setInterval(() => {
+    duelTimer--;
+    document.getElementById('math-timer').textContent = duelTimer + ' mp';
+    if (duelTimer <= 5) {
+      document.getElementById('math-timer').style.color = '#e74c3c';
+    }
+    if (duelTimer <= 0) {
+      endDuel(false);
+    }
+  }, 1000);
+}
+
+function endDuel(won) {
+  duelActive = false;
+  clearInterval(duelTimerInterval);
+  duelTimerInterval = null;
+  document.getElementById('math-modal').classList.remove('active');
+  document.getElementById('math-timer').style.display = 'none';
+  document.getElementById('math-timer').style.color = '#e67e22';
+  document.getElementById('math-box').querySelector('.sub').textContent = 'Nincs idokorlat - gondolkodj nyugodtan!';
+  mathCallback = null;
+
+  if (won) {
+    showMsg('Legyozted a zombit!');
+  } else {
+    if (inventory.wood > 0) inventory.wood--;
+    if (inventory.stone > 0) inventory.stone--;
+    updateUI();
+    saveWorld();
+    showMsg('Az ido lejart! Elvesztettel 1 fat es 1 kovet!');
+  }
+  spawnZombie();
+}
+
 function regenerate() {
   if (document.getElementById('math-modal').classList.contains('active')) return;
   generateWorld();
   inventory = { wood: 0, stone: 0 };
   buildMode = null;
+  spawnZombie();
   saveWorld();
   updateUI();
   showMsg('Uj vilag generalva!');
@@ -260,6 +448,7 @@ function regenerate() {
 if (!loadWorld()) {
   generateWorld();
 }
+spawnZombie();
 
 const S = TILE / 40;
 const grassColors = ['#4a7c3f', '#3d6b35', '#55863f', '#4e7a42'];
@@ -455,6 +644,13 @@ function render() {
     }
   }
 
+  // Draw zombie
+  let zoff = getZombieVisualOffset();
+  let zsx = zombie.x * TILE + zoff.ox - camera.x;
+  let zsy = zombie.y * TILE + zoff.oy - camera.y;
+  drawZombie(zsx, zsy);
+
+  // Draw player
   let off = getPlayerVisualOffset();
   let psx = player.x * TILE + off.ox - camera.x;
   let psy = player.y * TILE + off.oy - camera.y;
@@ -578,6 +774,7 @@ canvas.addEventListener('touchend', (e) => {
 
 function movePlayer(dx, dy) {
   if (player.walking) return;
+  if (duelActive) return;
   if (dx === 1) player.dir = 1;
   else if (dx === -1) player.dir = 3;
   else if (dy === -1) player.dir = 0;
@@ -585,6 +782,8 @@ function movePlayer(dx, dy) {
 
   let nx = player.x + dx, ny = player.y + dy;
   if (nx < 0 || nx >= WORLD_W || ny < 0 || ny >= WORLD_H) return;
+  // Can't walk into zombie
+  if (nx === zombie.x && ny === zombie.y) return;
   let t = world[ny][nx].type;
   if (t === EMPTY || t === FLOOR || t === DOOR) {
     player.x = nx;
@@ -594,6 +793,10 @@ function movePlayer(dx, dy) {
     player.vx = -dx * TILE;
     player.vy = -dy * TILE;
     saveWorld();
+    // Check if now adjacent to zombie
+    if (!duelActive && Math.abs(player.x - zombie.x) + Math.abs(player.y - zombie.y) === 1) {
+      startDuel();
+    }
   }
 }
 
@@ -802,6 +1005,7 @@ function gameLoop() {
   let dt = now - lastTime;
   lastTime = now;
   updateMovement(dt);
+  updateZombie(dt);
   setTimeout(gameLoop, 16);
 }
 

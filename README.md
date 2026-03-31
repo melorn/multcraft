@@ -29,9 +29,17 @@ Use collected resources to build structures. Each build also requires solving a 
 
 Select a building type, then click/tap an empty tile to place it. Press Escape or the "Megse" button to cancel.
 
+### Zombie
+A zombie roams the world. When the player walks next to it, a **duel** begins:
+- A timed multiplication problem appears (15–30 second limit)
+- **Solve it in time** → zombie is defeated and respawns far away
+- **Time runs out** → lose 1 Wood and 1 Stone; zombie respawns far away
+- There is always exactly one zombie on the map
+
 ### Multiplication Questions
 - Random problems from the 2-9 range (e.g. 3 x 7 = ?)
-- No time pressure — players can take as long as they need
+- No time pressure on resource/building problems — players can take as long as they need
+- Zombie duels are timed (see above)
 - Wrong answers prompt a retry with the same problem
 
 ### World Persistence
@@ -82,8 +90,14 @@ index.html (single file)
     │   ├── tryPlace()         — place building on empty tile after math challenge
     │   └── cancelBuild()      — exit build mode
     │
+    ├── Zombie
+    │   ├── spawnZombie()      — places zombie on empty tile far from player
+    │   ├── updateZombie()     — random slow movement, adjacency check triggers duel
+    │   ├── startDuel()        — timed math challenge (15-30s)
+    │   └── endDuel()          — win: respawn zombie; lose: remove resources + respawn
+    │
     └── Math Challenge
-        ├── showMath()         — generates random AxB (1-10), displays modal
+        ├── showMath()         — generates random AxB (2-9), displays modal
         └── checkAnswer()      — validates input, calls success callback or retries
 ```
 
@@ -93,6 +107,7 @@ index.html (single file)
   - `type`: EMPTY(0), TREE(1), STONE(2), WALL(3), FLOOR(4), DOOR(5), ROOF(6)
   - `grass`: 0-3, cosmetic grass variant for the base layer
 - **player**: `{ x, y, dir }` — grid position and facing direction (0=up, 1=right, 2=down, 3=left)
+- **zombie**: `{ x, y, dir }` — same structure as player; one always present on the map
 - **inventory**: `{ wood, stone }` — resource counts
 
 ### Game Flow
