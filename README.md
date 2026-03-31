@@ -38,7 +38,7 @@ Select a building type, then click/tap an empty tile to place it. Press Escape o
 The game automatically saves to localStorage after every action (moving, collecting, building). Returning to the page restores the previous session.
 
 ### Regenerate
-The "Uj Vilag" button generates a fresh world and resets all inventory.
+The hamburger menu (top-left) contains the "Uj Vilag" option, which generates a fresh world and resets all inventory.
 
 ## Tech
 Single-file HTML/CSS/JS app with canvas rendering. No dependencies. Works on desktop and mobile browsers.
@@ -49,9 +49,10 @@ Single-file HTML/CSS/JS app with canvas rendering. No dependencies. Works on des
 index.html (single file)
 ├── HTML
 │   ├── <canvas>           — game world rendering
-│   ├── #ui                — inventory display (top-left)
+│   ├── #hamburger-menu     — hamburger menu with Uj Vilag option (top-left)
+│   ├── #ui                — inventory display (top-left, below hamburger)
 │   ├── #build-menu        — building buttons [1]-[4] (top-right)
-│   ├── #touch-actions     — action buttons: Gyujtes, Megse, Uj Vilag (bottom)
+│   ├── #touch-actions     — action buttons: Gyujtes, Megse (bottom)
 │   ├── #math-modal        — multiplication challenge overlay
 │   └── #message           — toast notifications
 │

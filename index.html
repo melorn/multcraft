@@ -9,8 +9,35 @@
 body { background: #1a1a2e; overflow: hidden; font-family: 'Courier New', monospace; touch-action: none; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 canvas { display: block; touch-action: none; }
 
+#hamburger-menu {
+  position: fixed; top: 14px; left: 14px; z-index: 20;
+}
+#hamburger-btn {
+  width: 56px; height: 56px; background: rgba(0,0,0,0.75); border: 3px solid #444;
+  border-radius: 12px; cursor: pointer; display: flex; flex-direction: column;
+  justify-content: center; align-items: center; gap: 5px; padding: 0;
+}
+#hamburger-btn span {
+  display: block; width: 28px; height: 3px; background: #fff; border-radius: 2px;
+}
+#hamburger-btn:hover { border-color: #888; }
+#hamburger-dropdown {
+  display: none; position: absolute; top: 64px; left: 0;
+  background: rgba(0,0,0,0.85); border: 3px solid #444; border-radius: 12px;
+  padding: 12px 8px; min-width: 220px;
+}
+#hamburger-dropdown.open { display: block; }
+.menu-item {
+  display: block; width: 100%; padding: 14px 18px; margin: 4px 0;
+  background: transparent; color: #9b59b6; border: 2px solid #9b59b6;
+  border-radius: 8px; cursor: pointer; font-family: 'Courier New', monospace;
+  font-size: 28px; text-align: left; transition: all 0.2s; font-weight: bold;
+}
+.menu-item:hover { background: rgba(155,89,182,0.15); }
+.menu-item:active { background: rgba(155,89,182,0.3); }
+
 #ui {
-  position: fixed; top: 14px; left: 14px; color: #fff;
+  position: fixed; top: 80px; left: 14px; color: #fff;
   background: rgba(0,0,0,0.75); padding: 18px 24px; border-radius: 12px;
   font-size: 32px; z-index: 10; min-width: 300px;
   border: 3px solid #444;
@@ -49,7 +76,6 @@ canvas { display: block; touch-action: none; }
 .touch-btn:active { background: rgba(80,80,80,0.8); }
 #btn-collect { border-color: #5dade2; color: #5dade2; }
 #btn-cancel { border-color: #e74c3c; color: #e74c3c; display: none; }
-#btn-regen { border-color: #9b59b6; color: #9b59b6; }
 
 #math-modal {
   display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
@@ -95,6 +121,15 @@ canvas { display: block; touch-action: none; }
 <body>
 <canvas id="game"></canvas>
 
+<div id="hamburger-menu">
+  <button id="hamburger-btn" onclick="toggleMenu()" ontouchstart="toggleMenu(); event.preventDefault();">
+    <span></span><span></span><span></span>
+  </button>
+  <div id="hamburger-dropdown">
+    <button class="menu-item" onclick="menuRegen()" ontouchstart="menuRegen(); event.preventDefault();">Uj Vilag</button>
+  </div>
+</div>
+
 <div id="ui">
   <h3>Keszlet</h3>
   <div id="inventory"></div>
@@ -119,7 +154,6 @@ canvas { display: block; touch-action: none; }
 <div id="touch-actions">
   <button class="touch-btn" id="btn-collect" ontouchstart="tryCollect()" onclick="tryCollect()">Gyujtes</button>
   <button class="touch-btn" id="btn-cancel" ontouchstart="cancelBuild()" onclick="cancelBuild()">Megse</button>
-  <button class="touch-btn" id="btn-regen" ontouchstart="regenerate()" onclick="regenerate()">Uj Vilag</button>
 </div>
 
 <div id="math-modal">
@@ -162,6 +196,7 @@ const buildCosts = {
 };
 const buildTile = { wall: WALL, floor: FLOOR, door: DOOR, roof: ROOF };
 const buildNames = { wall: 'Fal', floor: 'Padlo', door: 'Ajto', roof: 'Teto' };
+const tileBuilding = { [WALL]: 'wall', [FLOOR]: 'floor', [DOOR]: 'door', [ROOF]: 'roof' };
 
 function resize() {
   canvas.width = window.innerWidth;
@@ -268,19 +303,20 @@ function drawTile(x, y, tile, sx, sy) {
   }
   else if (tile.type === WALL) {
     ctx.fillStyle = '#7f8c8d';
-    ctx.fillRect(px+3, py+3, TILE-6, TILE-6);
+    ctx.fillRect(px, py, TILE, TILE);
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(px, py, TILE, TILE);
+    ctx.clip();
     for (let r = 0; r < 4; r++) {
-      let oy = py + 5 + r * 15;
+      let oy = py + 2 + r * 15;
       let off = r % 2 === 0 ? 0 : 14;
       for (let c = -1; c < 4; c++) {
         ctx.strokeStyle = '#5a6a6d';
-        ctx.strokeRect(px + 5 + off + c * 28, oy, 26, 13);
+        ctx.strokeRect(px + 2 + off + c * 28, oy, 26, 13);
       }
     }
-    ctx.strokeStyle = '#555';
-    ctx.lineWidth = 3;
-    ctx.strokeRect(px+3, py+3, TILE-6, TILE-6);
-    ctx.lineWidth = 1;
+    ctx.restore();
   }
   else if (tile.type === FLOOR) {
     ctx.fillStyle = '#b5854b';
@@ -529,7 +565,7 @@ function handleTapOnTile(tx, ty) {
     return;
   }
 
-  // Tap on adjacent tree/stone = collect
+  // Tap on adjacent tree/stone/building = collect
   let dx = tx - player.x, dy = ty - player.y;
   if (Math.abs(dx) <= 1 && Math.abs(dy) <= 1) {
     let tile = world[ty][tx];
@@ -550,6 +586,22 @@ function handleTapOnTile(tx, ty) {
         updateUI();
         saveWorld();
         showMsg('+3 Ko!');
+      });
+      return;
+    }
+    let bkey = tileBuilding[tile.type];
+    if (bkey) {
+      let cost = buildCosts[bkey];
+      showMath(buildNames[bkey] + ' bontasa', () => {
+        tile.type = EMPTY;
+        inventory.wood += cost.wood;
+        inventory.stone += cost.stone;
+        updateUI();
+        saveWorld();
+        let parts = [];
+        if (cost.wood > 0) parts.push('+' + cost.wood + ' Fa');
+        if (cost.stone > 0) parts.push('+' + cost.stone + ' Ko');
+        showMsg(buildNames[bkey] + ' bontva! ' + parts.join(', '));
       });
       return;
     }
@@ -608,6 +660,22 @@ function tryCollect() {
         updateUI();
         saveWorld();
         showMsg('+3 Ko!');
+      });
+      return;
+    }
+    let bkey = tileBuilding[tile.type];
+    if (bkey) {
+      let cost = buildCosts[bkey];
+      showMath(buildNames[bkey] + ' bontasa', () => {
+        tile.type = EMPTY;
+        inventory.wood += cost.wood;
+        inventory.stone += cost.stone;
+        updateUI();
+        saveWorld();
+        let parts = [];
+        if (cost.wood > 0) parts.push('+' + cost.wood + ' Fa');
+        if (cost.stone > 0) parts.push('+' + cost.stone + ' Ko');
+        showMsg(buildNames[bkey] + ' bontva! ' + parts.join(', '));
       });
       return;
     }
@@ -701,6 +769,21 @@ document.addEventListener('touchmove', (e) => { e.preventDefault(); }, { passive
 document.addEventListener('gesturestart', (e) => { e.preventDefault(); });
 document.addEventListener('gesturechange', (e) => { e.preventDefault(); });
 document.addEventListener('gestureend', (e) => { e.preventDefault(); });
+
+function toggleMenu() {
+  document.getElementById('hamburger-dropdown').classList.toggle('open');
+}
+function menuRegen() {
+  document.getElementById('hamburger-dropdown').classList.remove('open');
+  regenerate();
+}
+// Close menu when clicking outside
+document.addEventListener('click', (e) => {
+  let menu = document.getElementById('hamburger-menu');
+  if (!menu.contains(e.target)) {
+    document.getElementById('hamburger-dropdown').classList.remove('open');
+  }
+});
 
 updateUI();
 render();
