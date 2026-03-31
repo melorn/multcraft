@@ -1,6 +1,6 @@
 # SzorzoKraft - Multiplication Learning Game
 
-A Minecraft-inspired 2D browser game that helps kids practice multiplication tables (1x1 through 10x10) through resource gathering and building.
+A Minecraft-inspired 2D browser game that helps kids practice multiplication tables (2x2 through 9x9) through resource gathering and building.
 
 ## How It Works
 
@@ -30,7 +30,7 @@ Use collected resources to build structures. Each build also requires solving a 
 Select a building type, then click/tap an empty tile to place it. Press Escape or the "Megse" button to cancel.
 
 ### Multiplication Questions
-- Random problems from the 1-10 range (e.g. 3 x 7 = ?)
+- Random problems from the 2-9 range (e.g. 3 x 7 = ?)
 - No time pressure — players can take as long as they need
 - Wrong answers prompt a retry with the same problem
 
