@@ -127,6 +127,9 @@ canvas { display: block; touch-action: none; }
   </button>
   <div id="hamburger-dropdown">
     <button class="menu-item" onclick="menuRegen()" ontouchstart="menuRegen(); event.preventDefault();">Uj Vilag</button>
+    <button class="menu-item" onclick="menuSave()" ontouchstart="menuSave(); event.preventDefault();">Mentes</button>
+    <button class="menu-item" onclick="menuLoad()" ontouchstart="menuLoad(); event.preventDefault();">Betoltes</button>
+    <input type="file" id="load-file-input" accept=".json" style="display:none">
   </div>
 </div>
 
@@ -1022,6 +1025,66 @@ function menuRegen() {
   document.getElementById('hamburger-dropdown').classList.remove('open');
   regenerate();
 }
+function menuSave() {
+  document.getElementById('hamburger-dropdown').classList.remove('open');
+  let data = {
+    world: world,
+    player: { x: player.x, y: player.y, dir: player.dir },
+    inventory: inventory,
+    zombie: { x: zombie.x, y: zombie.y, dir: zombie.dir }
+  };
+  let json = JSON.stringify(data);
+  let blob = new Blob([json], { type: 'application/json' });
+  let url = URL.createObjectURL(blob);
+  let a = document.createElement('a');
+  a.href = url;
+  a.download = 'szorzokraft_save.json';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showMsg('Vilag elmentve!');
+}
+function menuLoad() {
+  document.getElementById('hamburger-dropdown').classList.remove('open');
+  document.getElementById('load-file-input').click();
+}
+document.getElementById('load-file-input').addEventListener('change', function(e) {
+  let file = e.target.files[0];
+  if (!file) return;
+  let reader = new FileReader();
+  reader.onload = function(ev) {
+    try {
+      let data = JSON.parse(ev.target.result);
+      if (!data.world || !data.player || !data.inventory) {
+        showMsg('Ervenytelen mentes fajl!');
+        return;
+      }
+      world = data.world;
+      player.x = data.player.x;
+      player.y = data.player.y;
+      player.dir = data.player.dir;
+      player.vx = 0; player.vy = 0; player.walking = false; player.walkTime = 0;
+      inventory = data.inventory;
+      if (data.zombie) {
+        zombie.x = data.zombie.x;
+        zombie.y = data.zombie.y;
+        zombie.dir = data.zombie.dir;
+        zombie.vx = 0; zombie.vy = 0; zombie.walking = false; zombie.walkTime = 0;
+      } else {
+        spawnZombie();
+      }
+      buildMode = null;
+      saveWorld();
+      updateUI();
+      showMsg('Vilag betoltve!');
+    } catch(err) {
+      showMsg('Hiba a fajl betoltesekor!');
+    }
+  };
+  reader.readAsText(file);
+  e.target.value = '';
+});
 // Close menu when clicking outside
 document.addEventListener('click', (e) => {
   let menu = document.getElementById('hamburger-menu');
