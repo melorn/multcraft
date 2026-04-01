@@ -35,6 +35,21 @@ canvas { display: block; touch-action: none; }
 }
 .menu-item:hover { background: rgba(155,89,182,0.15); }
 .menu-item:active { background: rgba(155,89,182,0.3); }
+.submenu-label {
+  display: block; width: 100%; padding: 14px 18px; margin: 4px 0;
+  background: transparent; color: #e67e22; border: none;
+  font-family: 'Courier New', monospace; font-size: 24px; text-align: left; font-weight: bold;
+}
+.submenu-options {
+  display: flex; flex-wrap: wrap; gap: 6px; padding: 4px 18px 8px;
+}
+.submenu-options button {
+  padding: 8px 14px; background: transparent; color: #9b59b6; border: 2px solid #9b59b6;
+  border-radius: 8px; cursor: pointer; font-family: 'Courier New', monospace;
+  font-size: 22px; font-weight: bold; transition: all 0.2s; min-width: 44px;
+}
+.submenu-options button:hover { background: rgba(155,89,182,0.15); }
+.submenu-options button.active { background: rgba(155,89,182,0.35); border-color: #e67e22; color: #e67e22; }
 
 #ui {
   position: fixed; top: 80px; left: 14px; color: #fff;
@@ -130,6 +145,8 @@ canvas { display: block; touch-action: none; }
     <button class="menu-item" onclick="menuSave()" ontouchstart="menuSave(); event.preventDefault();">Mentes</button>
     <button class="menu-item" onclick="menuLoad()" ontouchstart="menuLoad(); event.preventDefault();">Betoltes</button>
     <input type="file" id="load-file-input" accept=".json" style="display:none">
+    <div class="submenu-label">Fókusz:</div>
+    <div class="submenu-options" id="focus-options"></div>
   </div>
 </div>
 
@@ -188,6 +205,7 @@ let camera = { x: 0, y: 0 };
 let buildMode = null;
 let mathCallback = null;
 let mathA = 0, mathB = 0;
+let mathFocus = 0; // 0 = All, 2-9 = focus on that multiplier
 let zombie = { x: 0, y: 0, dir: 2, vx: 0, vy: 0, walking: false, walkTime: 0 };
 let zombieMoveTimer = 0;
 const ZOMBIE_MOVE_INTERVAL = 800;
@@ -239,7 +257,8 @@ function saveWorld() {
   let data = {
     world: world,
     player: player,
-    inventory: inventory
+    inventory: inventory,
+    mathFocus: mathFocus
   };
   try { localStorage.setItem('szorzokraft_save', JSON.stringify(data)); } catch(e) {}
 }
@@ -254,6 +273,8 @@ function loadWorld() {
     player = data.player;
     player.vx = 0; player.vy = 0; player.walking = false; player.walkTime = 0;
     inventory = data.inventory;
+    mathFocus = data.mathFocus || 0;
+    updateFocusButtons();
     return true;
   } catch(e) { return false; }
 }
@@ -387,8 +408,14 @@ function startDuel() {
   duelDuration = Math.floor(Math.random() * 16) + 15; // 15-30 seconds
   duelTimer = duelDuration;
 
-  mathA = Math.floor(Math.random() * 8) + 2;
-  mathB = Math.floor(Math.random() * 8) + 2;
+  if (mathFocus >= 2 && mathFocus <= 9) {
+    mathA = mathFocus;
+    mathB = Math.floor(Math.random() * 9) + 2;
+    if (Math.random() < 0.5) { let tmp = mathA; mathA = mathB; mathB = tmp; }
+  } else {
+    mathA = Math.floor(Math.random() * 8) + 2;
+    mathB = Math.floor(Math.random() * 8) + 2;
+  }
   mathCallback = function() {
     endDuel(true);
   };
@@ -689,8 +716,14 @@ function updateBuildUI() {
 
 // Math challenge
 function showMath(actionText, callback) {
-  mathA = Math.floor(Math.random() * 8) + 2;
-  mathB = Math.floor(Math.random() * 8) + 2;
+  if (mathFocus >= 2 && mathFocus <= 9) {
+    mathA = mathFocus;
+    mathB = Math.floor(Math.random() * 9) + 2;
+    if (Math.random() < 0.5) { let tmp = mathA; mathA = mathB; mathB = tmp; }
+  } else {
+    mathA = Math.floor(Math.random() * 8) + 2;
+    mathB = Math.floor(Math.random() * 8) + 2;
+  }
   mathCallback = callback;
   document.getElementById('math-action').textContent = actionText;
   document.getElementById('math-question').textContent = `${mathA} \u00d7 ${mathB} = ?`;
@@ -1018,6 +1051,33 @@ document.addEventListener('gesturestart', (e) => { e.preventDefault(); });
 document.addEventListener('gesturechange', (e) => { e.preventDefault(); });
 document.addEventListener('gestureend', (e) => { e.preventDefault(); });
 
+// Focus submenu
+function initFocusButtons() {
+  let container = document.getElementById('focus-options');
+  let labels = ['Mind'];
+  for (let i = 2; i <= 9; i++) labels.push(String(i));
+  labels.forEach((label, idx) => {
+    let val = idx === 0 ? 0 : idx + 1;
+    let btn = document.createElement('button');
+    btn.textContent = label;
+    btn.dataset.focus = val;
+    btn.onclick = btn.ontouchstart = function(e) {
+      if (e.type === 'touchstart') e.preventDefault();
+      mathFocus = val;
+      updateFocusButtons();
+      saveWorld();
+    };
+    container.appendChild(btn);
+  });
+  updateFocusButtons();
+}
+function updateFocusButtons() {
+  document.querySelectorAll('#focus-options button').forEach(btn => {
+    btn.classList.toggle('active', parseInt(btn.dataset.focus) === mathFocus);
+  });
+}
+initFocusButtons();
+
 function toggleMenu() {
   document.getElementById('hamburger-dropdown').classList.toggle('open');
 }
@@ -1031,7 +1091,8 @@ function menuSave() {
     world: world,
     player: { x: player.x, y: player.y, dir: player.dir },
     inventory: inventory,
-    zombie: { x: zombie.x, y: zombie.y, dir: zombie.dir }
+    zombie: { x: zombie.x, y: zombie.y, dir: zombie.dir },
+    mathFocus: mathFocus
   };
   let json = JSON.stringify(data);
   let blob = new Blob([json], { type: 'application/json' });
@@ -1074,7 +1135,9 @@ document.getElementById('load-file-input').addEventListener('change', function(e
       } else {
         spawnZombie();
       }
+      mathFocus = data.mathFocus || 0;
       buildMode = null;
+      updateFocusButtons();
       saveWorld();
       updateUI();
       showMsg('Vilag betoltve!');

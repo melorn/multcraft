@@ -42,6 +42,13 @@ A zombie roams the world. When the player walks next to it, a **duel** begins:
 - Zombie duels are timed (see above)
 - Wrong answers prompt a retry with the same problem
 
+### Focus Mode
+The hamburger menu contains a "Fókusz" submenu where players can focus on a specific multiplication table:
+- **Mind** (default): random problems from the full 2-9 range
+- **2–9**: questions always include the selected number as one operand (e.g. selecting 3 gives problems like 3 × 7, 5 × 3, etc.)
+
+The focus setting is saved with the world and persists across sessions.
+
 ### World Persistence
 The game automatically saves to localStorage after every action (moving, collecting, building). Returning to the page restores the previous session.
 
@@ -57,7 +64,7 @@ Single-file HTML/CSS/JS app with canvas rendering. No dependencies. Works on des
 index.html (single file)
 ├── HTML
 │   ├── <canvas>           — game world rendering
-│   ├── #hamburger-menu     — hamburger menu with Uj Vilag option (top-left)
+│   ├── #hamburger-menu     — hamburger menu with Uj Vilag, save/load, and Focus submenu (top-left)
 │   ├── #ui                — inventory display (top-left, below hamburger)
 │   ├── #build-menu        — building buttons [1]-[4] (top-right)
 │   ├── #touch-actions     — action buttons: Gyujtes, Megse (bottom)
